@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEthereumAddress,
@@ -11,26 +12,37 @@ import {
 } from 'class-validator';
 
 export class SwapIntentDto {
+  @ApiProperty({ example: 1, description: 'Identifiant de chaîne EVM' })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   chainId!: number;
 
+  @ApiProperty({ example: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' })
   @IsEthereumAddress()
   tokenIn!: string;
 
+  @ApiProperty({ example: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' })
   @IsEthereumAddress()
   tokenOut!: string;
 
-  /** Wei / smallest unit as decimal string (avoids JSON bigint issues). */
+  @ApiProperty({
+    description: 'Montant entrant en plus petite unité (string décimale, pas de notation scientifique)',
+    example: '1000000',
+  })
   @IsString()
   @Matches(/^\d+$/)
   amountIn!: string;
 
+  @ApiPropertyOptional({ enum: ['uniswap'], default: 'uniswap' })
   @IsOptional()
   @IsIn(['uniswap'])
   protocolId?: 'uniswap';
 
+  @ApiPropertyOptional({
+    description: 'Indice 0–100 pour l’évaluateur social (placeholder)',
+    example: 55,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsPositive()
