@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ForbiddenRiskException } from '../common/exceptions/forbidden-risk.exception';
 import { SecurityEvaluator } from './evaluators/security.evaluator';
 import { SocialEvaluator } from './evaluators/social.evaluator';
+import { TelegramRiskEvaluator } from './evaluators/telegram-risk.evaluator';
 import { SimulationService } from './simulation/simulation.service';
 import type {
   ExecutionIntent,
@@ -16,6 +17,7 @@ export class RiskEngineService {
     private readonly simulation: SimulationService,
     private readonly securityEvaluator: SecurityEvaluator,
     private readonly socialEvaluator: SocialEvaluator,
+    private readonly telegramRiskEvaluator: TelegramRiskEvaluator,
     private readonly configService: ConfigService,
   ) {}
 
@@ -26,13 +28,19 @@ export class RiskEngineService {
     const simulation = await this.simulation.simulate(intent);
     const security = this.securityEvaluator.score(intent);
     const social = this.socialEvaluator.score(intent);
-    const aggregate = Math.round((security * 0.6 + social * 0.4) * 10) / 10;
+    const telegram = this.telegramRiskEvaluator.score(intent);
+    const aggregate =
+      Math.round(
+        (security * 0.35 + social * 0.25 + telegram * 0.4) * 10,
+      ) / 10;
 
     const minScore =
       this.configService.get<number>('riskMinAggregateScore') ?? 60;
 
     let verdict: RiskVerdict;
     if (!simulation.success) {
+      verdict = RiskVerdict.FAIL;
+    } else if (telegram === 0) {
       verdict = RiskVerdict.FAIL;
     } else if (aggregate < minScore) {
       verdict = RiskVerdict.REVIEW;
@@ -46,7 +54,7 @@ export class RiskEngineService {
 
     return {
       verdict,
-      scores: { security, social, aggregate },
+      scores: { security, social, telegram, aggregate },
       simulation,
       evaluatedAt: new Date().toISOString(),
     };

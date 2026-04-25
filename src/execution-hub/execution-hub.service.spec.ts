@@ -7,7 +7,7 @@ import { KeeperHubClient } from './keeper-hub/keeper-hub.client';
 
 const passAssessment = {
   verdict: RiskVerdict.PASS,
-  scores: { security: 80, social: 70, aggregate: 76 },
+  scores: { security: 80, social: 70, telegram: 100, aggregate: 76 },
   simulation: { success: true, gasUsed: 100_000n },
   evaluatedAt: new Date().toISOString(),
 } as const;

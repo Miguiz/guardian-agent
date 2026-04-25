@@ -38,7 +38,7 @@ describe('AgentService', () => {
           useValue: {
             assess: jest.fn().mockResolvedValue({
               verdict: RiskVerdict.FAIL,
-              scores: { security: 0, social: 0, aggregate: 0 },
+              scores: { security: 0, social: 0, telegram: 0, aggregate: 0 },
               simulation: { success: false },
               evaluatedAt: new Date().toISOString(),
             }),
