@@ -4,7 +4,7 @@ import { formatUnknownError } from '../../common/format-unknown-error';
 import { createPublicClient, getAddress, http, isAddress } from 'viem';
 import type { ExecutionIntent } from '../types/risk-assessment.types';
 import type { SimulationResult } from './simulation.types';
-import { resolveViemChain } from './viem-chain';
+import { resolveViemChain } from '../../common/viem-chain';
 
 /**
  * On-chain simulation via viem `eth_call` when an RPC URL exists for the chain.

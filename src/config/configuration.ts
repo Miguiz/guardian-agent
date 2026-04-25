@@ -4,6 +4,10 @@ export interface AppConfiguration {
   riskMinAggregateScore: number;
   uniswapApiBaseUrl: string;
   uniswapApiKey: string | undefined;
+  /** Default `swapper` for Uniswap Trade API when the HTTP body omits `swapper`. */
+  uniswapSwapperAddress: string | undefined;
+  /** When true and no API key, use legacy stub calldata (unsafe). */
+  uniswapAllowStubFallback: boolean;
   rpcUrlByChainId: Readonly<Record<number, string>>;
   keeperHubRelayEndpoint: string | undefined;
   /** `from` address passed to viem `eth_call` / `estimateGas` (must be valid 0x + 40 hex). */
@@ -69,8 +73,13 @@ export function configuration(): AppConfiguration {
       ? riskMinAggregateScore
       : 60,
     uniswapApiBaseUrl:
-      process.env.UNISWAP_API_BASE_URL ?? 'https://api.uniswap.org',
+      process.env.UNISWAP_API_BASE_URL ??
+      'https://trade-api.gateway.uniswap.org',
     uniswapApiKey: process.env.UNISWAP_API_KEY,
+    uniswapSwapperAddress: process.env.UNISWAP_SWAPPER_ADDRESS,
+    uniswapAllowStubFallback: ['true', '1', 'yes'].includes(
+      (process.env.UNISWAP_ALLOW_STUB_FALLBACK ?? '').toLowerCase(),
+    ),
     rpcUrlByChainId,
     keeperHubRelayEndpoint: process.env.KEEPERHUB_RELAY_ENDPOINT,
     simulationFromAddress:

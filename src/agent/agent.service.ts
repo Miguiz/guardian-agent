@@ -35,6 +35,7 @@ export class AgentService {
       tokenIn: dto.tokenIn as Address,
       tokenOut: dto.tokenOut as Address,
       amountIn,
+      swapper: dto.swapper as Address | undefined,
     });
 
     const intent: ExecutionIntent = {

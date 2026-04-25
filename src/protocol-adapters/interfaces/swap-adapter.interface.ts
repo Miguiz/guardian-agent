@@ -6,6 +6,8 @@ export interface SwapQuoteRequest {
   readonly tokenOut: Address;
   readonly amountIn: bigint;
   readonly slippageBps?: number;
+  /** Wallet passed to Uniswap `swapper` (quote + calldata). */
+  readonly swapper?: Address;
 }
 
 export interface SwapRouteArtifact {

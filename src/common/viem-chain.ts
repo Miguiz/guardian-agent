@@ -19,7 +19,7 @@ const known = new Map<number, Chain>([
 ]);
 
 /**
- * Resolves a viem `Chain` for simulation. Unknown ids become minimal custom chains using the given RPC.
+ * Resolves a viem `Chain` for RPC calls. Unknown ids become minimal custom chains using the given RPC.
  */
 export function resolveViemChain(chainId: number, rpcUrl: string): Chain {
   const preset = known.get(chainId);

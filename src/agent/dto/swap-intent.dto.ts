@@ -47,4 +47,13 @@ export class SwapIntentDto {
   @Type(() => Number)
   @IsPositive()
   socialHypeIndex?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Adresse du wallet Uniswap `swapper` (sinon UNISWAP_SWAPPER_ADDRESS / SIMULATION_FROM_ADDRESS)',
+    example: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+  })
+  @IsOptional()
+  @IsEthereumAddress()
+  swapper?: string;
 }
