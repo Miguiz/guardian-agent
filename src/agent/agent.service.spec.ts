@@ -8,6 +8,9 @@ import { RiskEngineService } from '../risk-engine/risk-engine.service';
 import { RiskVerdict } from '../risk-engine/types/risk-assessment.types';
 import { AgentService } from './agent.service';
 
+/** Adresse valide pour les corps Zod (`swapper` obligatoire). */
+const TEST_SWAPPER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as const;
+
 const mockAssessmentPass = {
     verdict: RiskVerdict.PASS,
     scores: { security: 80, social: 70, telegram: 90, aggregate: 82 },
@@ -41,6 +44,7 @@ describe('AgentService', () => {
                 tokenIn: '0x0000000000000000000000000000000000000001',
                 tokenOut: '0x0000000000000000000000000000000000000002',
                 amountIn: '1',
+                swapper: TEST_SWAPPER,
             }),
         ).rejects.toThrow(UnprocessableEntityException);
     });
@@ -88,6 +92,7 @@ describe('AgentService', () => {
             tokenIn: '0x0000000000000000000000000000000000000001',
             tokenOut: '0x0000000000000000000000000000000000000002',
             amountIn: '1000',
+            swapper: TEST_SWAPPER,
         });
 
         expect(out.verdict).toBe(RiskVerdict.FAIL);
@@ -145,6 +150,7 @@ describe('AgentService', () => {
             tokenIn: '0x0000000000000000000000000000000000000001',
             tokenOut: '0x0000000000000000000000000000000000000002',
             amountIn: '1000',
+            swapper: TEST_SWAPPER,
         });
 
         expect(out.verdict).toBe(RiskVerdict.PASS);

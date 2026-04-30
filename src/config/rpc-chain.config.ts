@@ -23,14 +23,41 @@ const zeroGGalileoTestnet = defineChain({
   rpcUrls: { default: { http: ['https://evmrpc-testnet.0g.ai'] } },
 });
 
-/** `chainId` → définition viem (RPC public = `rpcUrls.default.http[0]`). */
+/**
+ * [PublicNode](https://publicnode.com/) — remplace les `http[0]` viem (ex. mainnet → merkle.io)
+ * souvent en 429 / Cloudflare pour les appels serveur.
+ */
+const PUBLICNODE_HTTP_RPC: Readonly<Record<number, string>> = {
+  [mainnet.id]: 'https://ethereum-rpc.publicnode.com',
+  [base.id]: 'https://base-rpc.publicnode.com',
+  [arbitrum.id]: 'https://arbitrum-one-rpc.publicnode.com',
+  [optimism.id]: 'https://optimism-rpc.publicnode.com',
+  [polygon.id]: 'https://polygon-bor-rpc.publicnode.com',
+  [bsc.id]: 'https://bsc-rpc.publicnode.com',
+};
+
+function chainWithPreferredRpc(chain: Chain): Chain {
+  const url = PUBLICNODE_HTTP_RPC[chain.id];
+  if (!url) {
+    return chain;
+  }
+  return {
+    ...chain,
+    rpcUrls: {
+      ...chain.rpcUrls,
+      default: { http: [url] },
+    },
+  };
+}
+
+/** `chainId` → définition viem + RPC HTTP (PublicNode pour L1/L2 listées, 0G inchangé). */
 export const chainById: Record<number, Chain> = {
-  [mainnet.id]: mainnet,
-  [base.id]: base,
-  [arbitrum.id]: arbitrum,
-  [optimism.id]: optimism,
-  [polygon.id]: polygon,
-  [bsc.id]: bsc,
+  [mainnet.id]: chainWithPreferredRpc(mainnet),
+  [base.id]: chainWithPreferredRpc(base),
+  [arbitrum.id]: chainWithPreferredRpc(arbitrum),
+  [optimism.id]: chainWithPreferredRpc(optimism),
+  [polygon.id]: chainWithPreferredRpc(polygon),
+  [bsc.id]: chainWithPreferredRpc(bsc),
   [zeroGMainnet.id]: zeroGMainnet,
   [zeroGGalileoTestnet.id]: zeroGGalileoTestnet,
 };
@@ -39,7 +66,7 @@ export function getSupportedEvmChain(chainId: number): Chain | undefined {
   return chainById[chainId];
 }
 
-/** Premier endpoint HTTP public viem pour ce `chainId`. */
+/** Premier endpoint HTTP configuré pour ce `chainId` (voir `chainById`). */
 export function getRpcUrl(chainId: number): string | undefined {
   return chainById[chainId]?.rpcUrls.default.http[0];
 }

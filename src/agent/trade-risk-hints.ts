@@ -20,9 +20,9 @@ export function computeTradeRiskHints(
   const reasons: string[] = [];
   let weight = 0;
 
-  if (!preview || preview.source === 'stub') {
+  if (!preview) {
     reasons.push(
-      'Mode stub ou quote incomplète : ne pas utiliser pour estimer perte réelle ni risque scam.',
+      'Quote incomplète : ne pas utiliser pour estimer perte réelle ni risque scam.',
     );
     weight += 2;
   }
@@ -55,11 +55,7 @@ export function computeTradeRiskHints(
     }
   }
 
-  if (
-    preview?.slippageMaxOutputLoss &&
-    preview.expectedAmountOut &&
-    preview.source === 'live'
-  ) {
+  if (preview?.slippageMaxOutputLoss && preview.expectedAmountOut) {
     try {
       const loss = BigInt(preview.slippageMaxOutputLoss);
       const out = BigInt(preview.expectedAmountOut);

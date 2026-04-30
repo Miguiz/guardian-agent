@@ -93,14 +93,3 @@ export function extractQuotePreviewFromGatewayBody(
   };
 }
 
-export function stubQuotePreview(
-  appliedSlippageTolerancePercent: number,
-): SwapQuotePreview {
-  return {
-    source: 'stub',
-    slippageTolerancePercent: appliedSlippageTolerancePercent,
-    stubWarnings: [
-      'UNISWAP_STUB_MODE: pas de quote Trade API — impact prix, montants min/max et gas réels absents.',
-    ],
-  };
-}

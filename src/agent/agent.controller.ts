@@ -26,7 +26,7 @@ export class AgentController {
   @ApiOperation({
     summary: 'Évaluer le risque d’un swap',
     description:
-      'Quote Uniswap (ou stub) → évaluation RiskEngine (scores, simulation). Aucune transaction n’est exécutée ni relayée.',
+      'Quote Uniswap (Trade API) → évaluation RiskEngine (scores, simulation). `UNISWAP_API_KEY` obligatoire au démarrage du serveur. Aucune transaction n’est exécutée ni relayée.',
   })
   @ApiBody(swapIntentApiBody)
   @ApiOkResponse({ type: SwapRiskResponseDto })

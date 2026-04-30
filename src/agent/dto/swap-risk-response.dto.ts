@@ -5,7 +5,7 @@ import { RiskVerdict } from '../../risk-engine/types/risk-assessment.types';
 export const riskVerdictSchema = z.nativeEnum(RiskVerdict);
 
 export const quotePreviewResponseSchema = z.object({
-  source: z.enum(['live', 'stub']),
+  source: z.literal('live'),
   routing: z.string().optional(),
   requestId: z.string().optional(),
   slippageTolerancePercent: z.number().optional(),
@@ -16,7 +16,6 @@ export const quotePreviewResponseSchema = z.object({
   gasUseEstimate: z.string().optional(),
   gasFeeUsd: z.string().optional(),
   routeSummary: z.string().optional(),
-  stubWarnings: z.array(z.string()).optional(),
 });
 
 export const tradeRiskHintsResponseSchema = z.object({

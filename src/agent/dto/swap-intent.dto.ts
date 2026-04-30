@@ -38,11 +38,9 @@ export const swapIntentSchema = z.object({
   tokenOut: ethereumAddress,
   amountIn: amountInString,
   protocolId: z.literal('uniswap').optional().describe('Protocole de routage'),
-  swapper: ethereumAddress
-    .optional()
-    .describe(
-      'Wallet Uniswap swapper (sinon UNISWAP_SWAPPER_ADDRESS / SIMULATION_FROM_ADDRESS)',
-    ),
+  swapper: ethereumAddress.describe(
+    'Wallet Uniswap (`swapper` Trade API). Doit détenir `amountIn` de `tokenIn` et approuver le routeur sur la chaîne, sinon TRANSFER_FROM_FAILED.',
+  ),
   maxSlippagePercent: z
     .number()
     .min(0.01)

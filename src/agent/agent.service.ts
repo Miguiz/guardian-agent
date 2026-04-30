@@ -44,9 +44,6 @@ function mapQuotePreview(p: SwapQuotePreview): QuotePreviewResponseDto {
       : {}),
     ...(p.gasFeeUsd !== undefined ? { gasFeeUsd: p.gasFeeUsd } : {}),
     ...(p.routeSummary !== undefined ? { routeSummary: p.routeSummary } : {}),
-    ...(p.stubWarnings !== undefined
-      ? { stubWarnings: [...p.stubWarnings] }
-      : {}),
   };
 }
 
@@ -105,7 +102,7 @@ export class AgentService {
       tokenIn: dto.tokenIn as Address,
       tokenOut: dto.tokenOut as Address,
       amountIn,
-      swapper: dto.swapper as Address | undefined,
+      swapper: dto.swapper as Address,
       maxSlippagePercent: dto.maxSlippagePercent,
     });
 

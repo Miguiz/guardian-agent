@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Guardian DeFi Agent')
     .setDescription(
-      'API backend hackathon — évaluation de risque swap (quote Uniswap + RiskEngine), sans exécution de transaction.',
+      'API backend hackathon — évaluation de risque swap (quote Uniswap Trade API + RiskEngine), sans exécution de transaction. `UNISWAP_API_KEY` requise au démarrage du serveur.',
     )
     .setVersion('0.1.0')
     .build();

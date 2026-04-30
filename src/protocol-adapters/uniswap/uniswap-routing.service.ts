@@ -21,10 +21,7 @@ import type {
   SwapQuoteRequest,
   SwapRouteArtifact,
 } from '../interfaces/swap-adapter.interface';
-import {
-  extractQuotePreviewFromGatewayBody,
-  stubQuotePreview,
-} from './uniswap-quote-preview';
+import { extractQuotePreviewFromGatewayBody } from './uniswap-quote-preview';
 import { UniswapTradeApiClient } from './uniswap-trade-api.client';
 import {
   parseUniswapErrorBody,
@@ -33,6 +30,9 @@ import {
 } from './uniswap-trade-api.schema';
 
 const NATIVE = '0x0000000000000000000000000000000000000000';
+
+/** Gateway Uniswap Labs Trade API (fixe, non configurable par env). */
+const UNISWAP_TRADE_API_ORIGIN = 'https://trade-api.gateway.uniswap.org';
 
 const UNSUPPORTED_ROUTING = new Set([
   'DUTCH_V2',
@@ -67,29 +67,16 @@ export class UniswapRoutingService implements SwapAdapter {
     await this.assertTokenContractsIfRpc(request.chainId, tokenIn, tokenOut);
 
     const apiKey = this.configService.get<string | undefined>('uniswapApiKey');
-    const allowStub = this.configService.get<boolean>(
-      'uniswapAllowStubFallback',
-    );
-
-    if (apiKey?.trim()) {
-      return await this.fetchLiveQuoteOrBadGateway(
-        request,
-        tokenIn,
-        tokenOut,
-        apiKey.trim(),
+    if (!apiKey?.trim()) {
+      throw new BadGatewayException(
+        'UNISWAP_API_KEY missing from configuration (should be set at startup).',
       );
     }
-
-    if (allowStub) {
-      this.logger.warn(
-        'UNISWAP_ALLOW_STUB_FALLBACK is enabled — using stub calldata (not a real quote).',
-      );
-      return this.stubQuote({ ...request, tokenIn, tokenOut });
-    }
-
-    throw new UnprocessableEntityException(
-      'UNISWAP_API_KEY is required for live Uniswap quotes (header x-api-key). ' +
-        'Optional: UNISWAP_ALLOW_STUB_FALLBACK=true for unsafe local stub only.',
+    return await this.fetchLiveQuoteOrBadGateway(
+      request,
+      tokenIn,
+      tokenOut,
+      apiKey.trim(),
     );
   }
 
@@ -175,14 +162,41 @@ export class UniswapRoutingService implements SwapAdapter {
     }
 
     if (status >= 400 && status < 500) {
+      if (this.isTransferFromSimulationFailure(detail, bodyText)) {
+        throw new UnprocessableEntityException(
+          'Swap Uniswap : simulation impossible (TRANSFER_FROM_FAILED). ' +
+            'Le `swapper` doit posséder au moins `amountIn` de `tokenIn` sur cette chaîne et avoir approuvé le routeur Uniswap ; ' +
+            'sinon l’API refuse l’estimation de gaz. Une adresse « connue » sans ces jetons (ex. `0xd8da…`) provoquera toujours cette erreur.' +
+            ref,
+        );
+      }
+      const snippet = this.uniswapClientErrorSnippet(
+        detail ?? errorCode ?? bodyText,
+        720,
+      );
       throw new UnprocessableEntityException(
-        `Uniswap ${phase} rejeté (${status}) : ${detail ?? errorCode ?? bodyText}${ref}`,
+        `Uniswap ${phase} rejeté (${status}) : ${snippet}${ref}`,
       );
     }
 
     throw new BadGatewayException(
       `Uniswap ${phase}: erreur serveur (${status}). ${bodyText}`,
     );
+  }
+
+  private isTransferFromSimulationFailure(
+    detail: string | undefined,
+    bodyText: string,
+  ): boolean {
+    return `${detail ?? ''}${bodyText}`.toLowerCase().includes('transfer_from_failed');
+  }
+
+  private uniswapClientErrorSnippet(text: string, maxLen: number): string {
+    const t = text.replace(/\s+/g, ' ').trim();
+    if (t.length <= maxLen) {
+      return t;
+    }
+    return `${t.slice(0, maxLen)}…`;
   }
 
   private normalizeAddress(value: string): Address {
@@ -209,16 +223,29 @@ export class UniswapRoutingService implements SwapAdapter {
       chain,
       transport: http(rpcUrl),
     });
-    for (const token of [tokenIn, tokenOut]) {
-      if (token.toLowerCase() === NATIVE) {
-        continue;
+    try {
+      for (const token of [tokenIn, tokenOut]) {
+        if (token.toLowerCase() === NATIVE) {
+          continue;
+        }
+        const code = await client.getCode({ address: token });
+        if (!code || code === '0x') {
+          throw new UnprocessableEntityException(
+            `No contract code at token address ${token} on chain ${chainId}. Check the address or chain.`,
+          );
+        }
       }
-      const code = await client.getCode({ address: token });
-      if (!code || code === '0x') {
-        throw new UnprocessableEntityException(
-          `No contract code at token address ${token} on chain ${chainId}. Check the address or chain.`,
-        );
+    } catch (e: unknown) {
+      if (e instanceof UnprocessableEntityException) {
+        throw e;
       }
+      const msg = formatUnknownError(e);
+      this.logger.warn(
+        `eth_getCode failed chainId=${chainId} rpc=${rpcUrl} ${msg.slice(0, 400)}`,
+      );
+      throw new BadGatewayException(
+        `RPC indisponible pour la vérification des contrats (chain ${chainId}). ${msg.slice(0, 240)}`,
+      );
     }
   }
 
@@ -228,14 +255,11 @@ export class UniswapRoutingService implements SwapAdapter {
     tokenOut: Address,
     apiKey: string,
   ): Promise<SwapRouteArtifact> {
-    const baseUrl =
-      this.configService.get<string>('uniswapApiBaseUrl') ??
-      'https://trade-api.gateway.uniswap.org';
-    const base = baseUrl.replace(/\/$/, '');
+    const base = UNISWAP_TRADE_API_ORIGIN.replace(/\/$/, '');
     const swapper = this.resolveSwapper(request);
     if (!isAddress(swapper)) {
       throw new UnprocessableEntityException(
-        'Invalid swapper address. Set `swapper` on the request or UNISWAP_SWAPPER_ADDRESS.',
+        'Invalid `swapper` address in the request body.',
       );
     }
     const swapperNorm = getAddress(swapper);
@@ -348,33 +372,12 @@ export class UniswapRoutingService implements SwapAdapter {
   }
 
   private resolveSwapper(request: SwapQuoteRequest): string {
-    if (request.swapper) {
-      return request.swapper;
+    const s = request.swapper.trim();
+    if (!s) {
+      throw new UnprocessableEntityException(
+        'Missing `swapper` in the request body (Uniswap Trade API; wallet must hold `tokenIn` and approve the router for live quotes).',
+      );
     }
-    const fromEnv = this.configService.get<string | undefined>(
-      'uniswapSwapperAddress',
-    );
-    if (fromEnv?.trim()) {
-      return fromEnv.trim();
-    }
-    return (
-      this.configService.get<string>('simulationFromAddress') ??
-      '0x0000000000000000000000000000000000000001'
-    );
-  }
-
-  private stubQuote(request: SwapQuoteRequest): SwapRouteArtifact {
-    const router = '0xE592427A0AEce92De3Edee1F18E0157C05861564' as const;
-    const selector = '0x414bf389';
-    const encodedTail = request.tokenOut.slice(2).padStart(64, '0');
-    const calldata =
-      `${selector}${encodedTail}` as SwapRouteArtifact['calldata'];
-    const slippageTolerance = this.resolveSlippageTolerancePercent(request);
-    return {
-      router,
-      calldata,
-      value: 0n,
-      quotePreview: stubQuotePreview(slippageTolerance),
-    };
+    return s;
   }
 }

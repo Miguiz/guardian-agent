@@ -11,12 +11,12 @@ export interface SwapQuoteRequest {
    */
   readonly maxSlippagePercent?: number;
   /** Wallet passed to Uniswap `swapper` (quote + calldata). */
-  readonly swapper?: Address;
+  readonly swapper: Address;
 }
 
 /** Données de marché extraites du quote (hors exécution). */
 export interface SwapQuotePreview {
-  readonly source: 'live' | 'stub';
+  readonly source: 'live';
   readonly routing?: string;
   readonly requestId?: string;
   readonly slippageTolerancePercent?: number;
@@ -31,7 +31,6 @@ export interface SwapQuotePreview {
   readonly gasUseEstimate?: string;
   readonly gasFeeUsd?: string;
   readonly routeSummary?: string;
-  readonly stubWarnings?: readonly string[];
 }
 
 export interface SwapRouteArtifact {
@@ -39,7 +38,7 @@ export interface SwapRouteArtifact {
   readonly calldata: Hex;
   readonly value: bigint;
   readonly minAmountOut?: bigint;
-  /** Aperçu Trade API (live) ou stub — pour tests / UX risque. */
+  /** Aperçu Trade API (live). */
   readonly quotePreview?: SwapQuotePreview;
 }
 

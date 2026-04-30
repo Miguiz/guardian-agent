@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { formatUnknownError } from '../../common/format-unknown-error';
-import { createPublicClient, getAddress, http, isAddress } from 'viem';
+import { createPublicClient, getAddress, http } from 'viem';
 import type { ExecutionIntent } from '../types/risk-assessment.types';
 import type { SimulationResult } from './simulation.types';
 import {
@@ -9,14 +8,15 @@ import {
   getSupportedEvmChain,
 } from '../../config/rpc-chain.config';
 
+/** Compte `from` pour `eth_call` / `estimateGas` (lecture seule, pas de config env). */
+const SIMULATION_FROM = '0x0000000000000000000000000000000000000001' as const;
+
 /**
- * On-chain simulation via viem `eth_call` pour une chaîne supportée ; sinon stub.
+ * On-chain simulation via viem `eth_call` pour une chaîne supportée ; sinon stub léger.
  */
 @Injectable()
 export class SimulationService {
   private readonly logger = new Logger(SimulationService.name);
-
-  constructor(private readonly configService: ConfigService) {}
 
   async simulate(intent: ExecutionIntent): Promise<SimulationResult> {
     if (intent.data.toLowerCase().includes('deadbeef')) {
@@ -36,10 +36,7 @@ export class SimulationService {
       };
     }
 
-    const from = this.configService.get<string>('simulationFromAddress');
-    const sender =
-      (from && isAddress(from) ? getAddress(from) : undefined) ??
-      '0x0000000000000000000000000000000000000001';
+    const sender = getAddress(SIMULATION_FROM);
 
     try {
       const client = createPublicClient({
@@ -49,7 +46,7 @@ export class SimulationService {
 
       const to = getAddress(intent.to);
       await client.call({
-        account: getAddress(sender),
+        account: sender,
         to,
         data: intent.data,
         value: intent.value,
@@ -58,7 +55,7 @@ export class SimulationService {
       let gasUsed: bigint | undefined;
       try {
         gasUsed = await client.estimateGas({
-          account: getAddress(sender),
+          account: sender,
           to,
           data: intent.data,
           value: intent.value,
