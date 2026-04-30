@@ -1,12 +1,8 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import {
-  ApiBody,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AgentService } from './agent.service';
 import { SwapIntentDto } from './dto/swap-intent.dto';
+import { swapIntentApiBody } from './dto/swap-intent.swagger';
 import { SwapRiskResponseDto } from './dto/swap-risk-response.dto';
 
 @ApiTags('Guardian DeFi Agent')
@@ -32,7 +28,7 @@ export class AgentController {
     description:
       'Quote Uniswap (ou stub) → évaluation RiskEngine (scores, simulation). Aucune transaction n’est exécutée ni relayée.',
   })
-  @ApiBody({ type: SwapIntentDto })
+  @ApiBody(swapIntentApiBody)
   @ApiOkResponse({ type: SwapRiskResponseDto })
   assessSwapRisk(@Body() body: SwapIntentDto): Promise<SwapRiskResponseDto> {
     return this.agent.assessSwapRisk(body);

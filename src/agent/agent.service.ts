@@ -1,17 +1,25 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { ExecutionIntent } from '../risk-engine/types/risk-assessment.types';
-import type { RiskAssessment } from '../risk-engine/types/risk-assessment.types';
+import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
+import type {
+  ExecutionIntent,
+  RiskAssessment,
+} from '../risk-engine/types/risk-assessment.types';
 import { RiskEngineService } from '../risk-engine/risk-engine.service';
 import { ProtocolAdapterRegistry } from '../protocol-adapters/registry/protocol-adapter.registry';
 import type { SwapQuotePreview } from '../protocol-adapters/interfaces/swap-adapter.interface';
 import type { SwapIntentDto } from './dto/swap-intent.dto';
-import type { QuotePreviewResponseDto } from './dto/swap-risk-response.dto';
-import type { SwapRiskResponseDto } from './dto/swap-risk-response.dto';
+import type {
+  QuotePreviewResponseDto,
+  SwapRiskResponseDto,
+} from './dto/swap-risk-response.dto';
 import type { Address } from '../common/types/web3.types';
 import {
   computeTradeRiskHints,
   type TradeRiskHints,
 } from './trade-risk-hints';
+import {
+  getSupportedEvmChain,
+  supportedChainIdsForErrorMessage,
+} from '../config/rpc-chain.config';
 
 function mapQuotePreview(p: SwapQuotePreview): QuotePreviewResponseDto {
   return {
@@ -84,6 +92,11 @@ export class AgentService {
    * Quote (adapter) → risk assessment only (no on-chain relay).
    */
   async assessSwapRisk(dto: SwapIntentDto): Promise<SwapRiskResponseDto> {
+    if (!getSupportedEvmChain(dto.chainId)) {
+      throw new UnprocessableEntityException(
+        `Unsupported chainId: ${dto.chainId}. Supported: ${supportedChainIdsForErrorMessage()}.`,
+      );
+    }
     const protocolId = dto.protocolId ?? 'uniswap';
     const adapter = this.adapters.getSwapAdapter(protocolId);
     const amountIn = BigInt(dto.amountIn);
@@ -93,18 +106,24 @@ export class AgentService {
       tokenOut: dto.tokenOut as Address,
       amountIn,
       swapper: dto.swapper as Address | undefined,
-      slippageBps: dto.slippageBps,
+      maxSlippagePercent: dto.maxSlippagePercent,
     });
+
+    const ctx: Record<string, unknown> = {};
+    if (route.quotePreview?.priceImpactPercent !== undefined) {
+      ctx.quotePriceImpactPercent = route.quotePreview.priceImpactPercent;
+    }
+    if (route.quotePreview?.slippageTolerancePercent !== undefined) {
+      ctx.quoteSlippageTolerancePercent =
+        route.quotePreview.slippageTolerancePercent;
+    }
 
     const intent: ExecutionIntent = {
       chainId: dto.chainId,
       to: route.router,
       data: route.calldata,
       value: route.value,
-      context:
-        dto.socialHypeIndex !== undefined
-          ? { socialHypeIndex: dto.socialHypeIndex }
-          : undefined,
+      ...(Object.keys(ctx).length > 0 ? { context: ctx } : {}),
     };
 
     const assessment = await this.riskEngine.assess(intent);

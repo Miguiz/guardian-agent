@@ -1,17 +1,13 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { AppZodValidationPipe } from './common/zod/app-zod-validation.pipe';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new AppZodValidationPipe());
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Guardian DeFi Agent')
@@ -20,7 +16,9 @@ async function bootstrap(): Promise<void> {
     )
     .setVersion('0.1.0')
     .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const document = cleanupOpenApiDoc(
+    SwaggerModule.createDocument(app, swaggerConfig),
+  );
   SwaggerModule.setup('docs', app, document, {
     jsonDocumentUrl: 'docs/json',
   });

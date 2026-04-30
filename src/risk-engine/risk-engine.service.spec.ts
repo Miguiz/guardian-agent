@@ -5,14 +5,6 @@ import { RiskEngineService } from './risk-engine.service';
 import { RiskEngineModule } from './risk-engine.module';
 import { RiskVerdict } from './types/risk-assessment.types';
 
-function testConfiguration(): ReturnType<typeof configuration> {
-  return {
-    ...configuration(),
-    telegramBotToken: undefined,
-    telegramPollIntervalMs: 5_000,
-  };
-}
-
 describe('RiskEngineService', () => {
   let service: RiskEngineService;
 
@@ -21,7 +13,7 @@ describe('RiskEngineService', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [testConfiguration],
+          load: [configuration],
         }),
         RiskEngineModule,
       ],
@@ -39,34 +31,6 @@ describe('RiskEngineService', () => {
     });
     expect(assessment.verdict).toBe(RiskVerdict.FAIL);
     expect(assessment.simulation.success).toBe(false);
-  });
-
-  it('fails when target is on static Telegram risk list', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          load: [
-            (): ReturnType<typeof configuration> => ({
-              ...testConfiguration(),
-              telegramRiskStaticAddresses: [
-                '0x2222222222222222222222222222222222222222',
-              ],
-            }),
-          ],
-        }),
-        RiskEngineModule,
-      ],
-    }).compile();
-
-    const flaggedEngine = moduleRef.get(RiskEngineService);
-    const assessment = await flaggedEngine.assess({
-      chainId: 1,
-      to: '0x2222222222222222222222222222222222222222',
-      data: '0xa9059cbb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
-      value: 0n,
-    });
-    expect(assessment.scores.telegram).toBe(0);
-    expect(assessment.verdict).toBe(RiskVerdict.FAIL);
+    expect(assessment.scores.telegram).toBe(100);
   });
 });

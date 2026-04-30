@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SecurityEvaluator } from './evaluators/security.evaluator';
 import { SocialEvaluator } from './evaluators/social.evaluator';
-import { TelegramRiskEvaluator } from './evaluators/telegram-risk.evaluator';
 import { SimulationService } from './simulation/simulation.service';
 import type {
   ExecutionIntent,
@@ -16,7 +15,6 @@ export class RiskEngineService {
     private readonly simulation: SimulationService,
     private readonly securityEvaluator: SecurityEvaluator,
     private readonly socialEvaluator: SocialEvaluator,
-    private readonly telegramRiskEvaluator: TelegramRiskEvaluator,
     private readonly configService: ConfigService,
   ) {}
 
@@ -27,7 +25,8 @@ export class RiskEngineService {
     const simulation = await this.simulation.simulate(intent);
     const security = this.securityEvaluator.score(intent);
     const social = this.socialEvaluator.score(intent);
-    const telegram = this.telegramRiskEvaluator.score(intent);
+    /** Pas de flux externe (ex. blocklist) : neutre pour l’agrégat. */
+    const telegram = 100;
     const aggregate =
       Math.round(
         (security * 0.35 + social * 0.25 + telegram * 0.4) * 10,
@@ -38,8 +37,6 @@ export class RiskEngineService {
 
     let verdict: RiskVerdict;
     if (!simulation.success) {
-      verdict = RiskVerdict.FAIL;
-    } else if (telegram === 0) {
       verdict = RiskVerdict.FAIL;
     } else if (aggregate < minScore) {
       verdict = RiskVerdict.REVIEW;

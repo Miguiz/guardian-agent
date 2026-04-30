@@ -9,7 +9,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createPublicClient, getAddress, http, isAddress } from 'viem';
-import { resolveViemChain } from '../../common/viem-chain';
+import {
+  getRpcUrl,
+  getSupportedEvmChain,
+  supportedChainIdsForErrorMessage,
+} from '../../config/rpc-chain.config';
 import { formatUnknownError } from '../../common/format-unknown-error';
 import type { Address } from '../../common/types/web3.types';
 import type {
@@ -21,6 +25,12 @@ import {
   extractQuotePreviewFromGatewayBody,
   stubQuotePreview,
 } from './uniswap-quote-preview';
+import { UniswapTradeApiClient } from './uniswap-trade-api.client';
+import {
+  parseUniswapErrorBody,
+  parseUniswapQuoteEnvelope,
+  parseUniswapSwapSuccess,
+} from './uniswap-trade-api.schema';
 
 const NATIVE = '0x0000000000000000000000000000000000000000';
 
@@ -30,31 +40,10 @@ const UNSUPPORTED_ROUTING = new Set([
   'PRIORITY',
 ]);
 
-interface ParsedUniswapErr {
-  readonly errorCode?: string;
-  readonly detail?: string;
-  readonly requestId?: string;
-}
-
-function parseUniswapErrorJson(bodyText: string): ParsedUniswapErr {
-  try {
-    const j = JSON.parse(bodyText) as Record<string, unknown>;
-    return {
-      errorCode: typeof j.errorCode === 'string' ? j.errorCode : undefined,
-      detail: typeof j.detail === 'string' ? j.detail : undefined,
-      requestId: typeof j.requestId === 'string' ? j.requestId : undefined,
-    };
-  } catch {
-    return {};
-  }
-}
-
 /**
- * Uniswap Labs **Trade API** (Gateway): POST /v1/quote then POST /v1/swap.
+ * Uniswap Labs **Trade API** (Gateway): POST /v1/quote puis POST /v1/swap.
+ * HTTP via **axios** ; réponses validées avec **Zod**.
  * @see https://api-docs.uniswap.org/
- *
- * Legacy GET on `api.uniswap.org` returns 409 — do not use.
- * Optional stub only when `UNISWAP_ALLOW_STUB_FALLBACK=true` (local demos).
  */
 @Injectable()
 export class UniswapRoutingService implements SwapAdapter {
@@ -62,9 +51,17 @@ export class UniswapRoutingService implements SwapAdapter {
 
   private readonly logger = new Logger(UniswapRoutingService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly tradeApi: UniswapTradeApiClient,
+  ) {}
 
   async getQuote(request: SwapQuoteRequest): Promise<SwapRouteArtifact> {
+    if (!getSupportedEvmChain(request.chainId)) {
+      throw new UnprocessableEntityException(
+        `Unsupported chainId: ${request.chainId}. Supported: ${supportedChainIdsForErrorMessage()}.`,
+      );
+    }
     const tokenIn = this.normalizeAddress(request.tokenIn);
     const tokenOut = this.normalizeAddress(request.tokenOut);
     await this.assertTokenContractsIfRpc(request.chainId, tokenIn, tokenOut);
@@ -123,15 +120,32 @@ export class UniswapRoutingService implements SwapAdapter {
     }
   }
 
+  private stringifyUniswapBody(data: unknown, maxLen = 800): string {
+    if (typeof data === 'string') {
+      return data.slice(0, maxLen);
+    }
+    try {
+      return JSON.stringify(data).slice(0, maxLen);
+    } catch {
+      return String(data).slice(0, maxLen);
+    }
+  }
+
   /**
    * Maps Uniswap HTTP failures: 4xx → client errors (no generic 502), 5xx → BadGateway.
    */
   private throwMappedUniswapFailure(
     status: number,
-    bodyText: string,
+    body: unknown,
     phase: 'quote' | 'swap',
   ): never {
-    const { errorCode, detail, requestId } = parseUniswapErrorJson(bodyText);
+    const bodyText = this.stringifyUniswapBody(body);
+    const parsed = parseUniswapErrorBody(
+      typeof body === 'object' && body !== null ? body : {},
+    );
+    const errorCode = parsed.errorCode;
+    const detail = parsed.detail;
+    const requestId = parsed.requestId;
 
     const ref =
       requestId !== undefined ? ` (requestId=${requestId})` : '';
@@ -162,12 +176,12 @@ export class UniswapRoutingService implements SwapAdapter {
 
     if (status >= 400 && status < 500) {
       throw new UnprocessableEntityException(
-        `Uniswap ${phase} rejeté (${status}) : ${detail ?? errorCode ?? bodyText.slice(0, 400)}${ref}`,
+        `Uniswap ${phase} rejeté (${status}) : ${detail ?? errorCode ?? bodyText}${ref}`,
       );
     }
 
     throw new BadGatewayException(
-      `Uniswap ${phase}: erreur serveur (${status}). ${bodyText.slice(0, 600)}`,
+      `Uniswap ${phase}: erreur serveur (${status}). ${bodyText}`,
     );
   }
 
@@ -186,14 +200,11 @@ export class UniswapRoutingService implements SwapAdapter {
     tokenIn: Address,
     tokenOut: Address,
   ): Promise<void> {
-    const rpcMap = this.configService.get<Readonly<Record<number, string>>>(
-      'rpcUrlByChainId',
-    );
-    const rpcUrl = rpcMap?.[chainId];
-    if (!rpcUrl) {
+    const chain = getSupportedEvmChain(chainId);
+    const rpcUrl = getRpcUrl(chainId);
+    if (!chain || !rpcUrl) {
       return;
     }
-    const chain = resolveViemChain(chainId, rpcUrl);
     const client = createPublicClient({
       chain,
       transport: http(rpcUrl),
@@ -239,96 +250,101 @@ export class UniswapRoutingService implements SwapAdapter {
       'x-permit2-disabled': 'true',
     };
 
-    const quoteRes = await fetch(`${base}/v1/quote`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        type: 'EXACT_INPUT',
-        amount: request.amountIn.toString(),
-        tokenInChainId: request.chainId,
-        tokenOutChainId: request.chainId,
-        tokenIn,
-        tokenOut,
-        swapper: swapperNorm,
-        slippageTolerance,
-      }),
+    const quoteUrl = `${base}/v1/quote`;
+    const quoteResult = await this.tradeApi.postJson(quoteUrl, headers, {
+      type: 'EXACT_INPUT',
+      amount: request.amountIn.toString(),
+      tokenInChainId: request.chainId,
+      tokenOutChainId: request.chainId,
+      tokenIn,
+      tokenOut,
+      swapper: swapperNorm,
+      slippageTolerance,
     });
 
-    const quoteText = await quoteRes.text();
-    if (!quoteRes.ok) {
-      this.throwMappedUniswapFailure(quoteRes.status, quoteText, 'quote');
+    if (quoteResult.status < 200 || quoteResult.status >= 300) {
+      this.throwMappedUniswapFailure(quoteResult.status, quoteResult.data, 'quote');
     }
 
-    let quote: Record<string, unknown>;
+    let quoteResponse: ReturnType<typeof parseUniswapQuoteEnvelope>;
     try {
-      quote = JSON.parse(quoteText) as Record<string, unknown>;
-    } catch {
-      throw new TypeError('quote response is not valid JSON');
-    }
-
-    const routing = quote['routing'];
-    if (typeof routing === 'string' && UNSUPPORTED_ROUTING.has(routing)) {
+      quoteResponse = parseUniswapQuoteEnvelope(quoteResult.data);
+    } catch (e: unknown) {
+      const hint = this.stringifyUniswapBody(quoteResult.data);
       throw new UnprocessableEntityException(
-        `This swap is routed as "${routing}" (UniswapX / order flow). This backend only supports direct AMM calldata from POST /v1/swap — try another pair, amount, or slippage.`,
+        e instanceof Error
+          ? e.message
+          : `Réponse /quote inattendue (Zod): ${hint}`,
       );
     }
 
-    const swapRes = await fetch(`${base}/v1/swap`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        quote,
-        simulate: true,
-        urgency: 'normal',
-      }),
+    if (
+      typeof quoteResponse.routing === 'string' &&
+      UNSUPPORTED_ROUTING.has(quoteResponse.routing)
+    ) {
+      throw new UnprocessableEntityException(
+        `This swap is routed as "${quoteResponse.routing}" (UniswapX / order flow). This backend only supports direct AMM calldata from POST /v1/swap — try another pair, amount, or slippage.`,
+      );
+    }
+
+    const swapQuotePayload = quoteResponse.quote;
+    if (!swapQuotePayload || typeof swapQuotePayload !== 'object') {
+      throw new UnprocessableEntityException(
+        'Réponse Uniswap /quote invalide : champ « quote » (objet de route) absent — impossible d’appeler POST /v1/swap.',
+      );
+    }
+
+    const swapUrl = `${base}/v1/swap`;
+    const swapResult = await this.tradeApi.postJson(swapUrl, headers, {
+      quote: swapQuotePayload,
+      simulateTransaction: true,
+      urgency: 'normal',
     });
 
-    const swapText = await swapRes.text();
-    if (!swapRes.ok) {
-      this.throwMappedUniswapFailure(swapRes.status, swapText, 'swap');
+    if (swapResult.status < 200 || swapResult.status >= 300) {
+      this.throwMappedUniswapFailure(swapResult.status, swapResult.data, 'swap');
     }
 
-    let swapBody: Record<string, unknown>;
+    let swapParsed: ReturnType<typeof parseUniswapSwapSuccess>;
     try {
-      swapBody = JSON.parse(swapText) as Record<string, unknown>;
-    } catch {
-      throw new TypeError('swap response is not valid JSON');
-    }
-
-    const swap = swapBody['swap'] as Record<string, unknown> | undefined;
-    if (!swap || typeof swap !== 'object') {
-      throw new TypeError(
-        `swap response missing "swap" object: ${swapText.slice(0, 400)}`,
+      swapParsed = parseUniswapSwapSuccess(swapResult.data);
+    } catch (e: unknown) {
+      const hint = this.stringifyUniswapBody(swapResult.data);
+      throw new UnprocessableEntityException(
+        e instanceof Error
+          ? e.message
+          : `Réponse /swap inattendue (Zod): ${hint}`,
       );
     }
 
-    const to = swap['to'];
-    const data = swap['data'];
-    const value = swap['value'];
-    if (typeof to !== 'string' || typeof data !== 'string') {
-      throw new TypeError('swap.swap missing to or data');
-    }
-    if (typeof value !== 'string') {
-      throw new TypeError('swap.swap missing value');
+    const { swap } = swapParsed;
+    let valueBn: bigint;
+    try {
+      valueBn = BigInt(swap.value);
+    } catch {
+      throw new UnprocessableEntityException(
+        `swap.value non convertible en bigint: ${swap.value}`,
+      );
     }
 
     const quotePreview = extractQuotePreviewFromGatewayBody(
-      quote,
+      quoteResponse as unknown as Record<string, unknown>,
       slippageTolerance,
     );
 
     return {
-      router: getAddress(to),
-      calldata: data as SwapRouteArtifact['calldata'],
-      value: BigInt(value),
+      router: getAddress(swap.to),
+      calldata: swap.data as SwapRouteArtifact['calldata'],
+      value: valueBn,
       quotePreview,
     };
   }
 
   private resolveSlippageTolerancePercent(request: SwapQuoteRequest): number {
-    return request.slippageBps !== undefined
-      ? Math.min(50, Math.max(0.01, request.slippageBps / 100))
-      : 0.5;
+    if (request.maxSlippagePercent !== undefined) {
+      return Math.min(50, Math.max(0.01, request.maxSlippagePercent));
+    }
+    return 0.5;
   }
 
   private resolveSwapper(request: SwapQuoteRequest): string {

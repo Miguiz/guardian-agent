@@ -84,13 +84,6 @@ export function computeTradeRiskHints(
     weight += 2;
   }
 
-  if (assessment.scores.telegram === 0) {
-    reasons.push(
-      'Contrat cible ou chemin signalé par Telegram / blocklist statique (score Telegram = 0).',
-    );
-    weight += 2;
-  }
-
   if (assessment.verdict === RiskVerdict.FAIL) {
     reasons.push('Verdict moteur : FAIL (agrégat ou règles bloquantes).');
     weight += 1;

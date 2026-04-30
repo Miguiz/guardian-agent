@@ -10,7 +10,7 @@ export enum RiskVerdict {
 export interface RiskScore {
   readonly security: number;
   readonly social: number;
-  /** 0–100 from Telegram channel / static blocklist signals. */
+  /** 0–100 ; fixé à 100 tant qu’aucune source externe de réputation n’est branchée. */
   readonly telegram: number;
   readonly aggregate: number;
 }

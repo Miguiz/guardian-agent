@@ -17,11 +17,14 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.4.1",
-    "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.1",
+    "axios": "^1.14.0",
+    "bignumber.js": "^10.0.2",
+    "nestjs-zod": "^5.1.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "viem": "^2.48.4"
+    "viem": "^2.48.4",
+    "zod": "^4.3.6",
+    "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

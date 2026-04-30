@@ -4,10 +4,13 @@ import { formatUnknownError } from '../../common/format-unknown-error';
 import { createPublicClient, getAddress, http, isAddress } from 'viem';
 import type { ExecutionIntent } from '../types/risk-assessment.types';
 import type { SimulationResult } from './simulation.types';
-import { resolveViemChain } from '../../common/viem-chain';
+import {
+  getRpcUrl,
+  getSupportedEvmChain,
+} from '../../config/rpc-chain.config';
 
 /**
- * On-chain simulation via viem `eth_call` when an RPC URL exists for the chain.
+ * On-chain simulation via viem `eth_call` pour une chaîne supportée ; sinon stub.
  */
 @Injectable()
 export class SimulationService {
@@ -23,15 +26,13 @@ export class SimulationService {
       };
     }
 
-    const rpcMap = this.configService.get<Readonly<Record<number, string>>>(
-      'rpcUrlByChainId',
-    );
-    const rpcUrl = rpcMap?.[intent.chainId];
-    if (!rpcUrl) {
+    const chain = getSupportedEvmChain(intent.chainId);
+    const rpcUrl = getRpcUrl(intent.chainId);
+    if (!chain || !rpcUrl) {
       return {
         success: true,
         gasUsed: 150_000n,
-        logs: ['simulation: stub (no RPC configured for chain)'],
+        logs: ['simulation: stub (unsupported chain)'],
       };
     }
 
@@ -41,7 +42,6 @@ export class SimulationService {
       '0x0000000000000000000000000000000000000001';
 
     try {
-      const chain = resolveViemChain(intent.chainId, rpcUrl);
       const client = createPublicClient({
         chain,
         transport: http(rpcUrl),

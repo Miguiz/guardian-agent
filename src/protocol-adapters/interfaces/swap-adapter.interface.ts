@@ -6,10 +6,10 @@ export interface SwapQuoteRequest {
   readonly tokenOut: Address;
   readonly amountIn: bigint;
   /**
-   * Tolérance envoyée à Uniswap : `slippageTolerance = slippageBps / 100` (%).
-   * Ex. `50` → 0,5 %. Plage typique 1–5000 (0,01 %–50 %), bornée côté service.
+   * Slippage max côté Uniswap, en **pourcentage** (ex. `0.5` → 0,5 %, `3` → 3 %).
+   * Borné entre 0,01 et 50 côté service ; défaut 0,5 % si absent.
    */
-  readonly slippageBps?: number;
+  readonly maxSlippagePercent?: number;
   /** Wallet passed to Uniswap `swapper` (quote + calldata). */
   readonly swapper?: Address;
 }
