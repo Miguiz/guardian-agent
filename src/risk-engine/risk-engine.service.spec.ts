@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
-import { ForbiddenRiskException } from '../common/exceptions/forbidden-risk.exception';
 import { configuration } from '../config/configuration';
 import { RiskEngineService } from './risk-engine.service';
 import { RiskEngineModule } from './risk-engine.module';
@@ -10,7 +9,7 @@ function testConfiguration(): ReturnType<typeof configuration> {
   return {
     ...configuration(),
     telegramBotToken: undefined,
-    telegramPollIntervalMs: 0,
+    telegramPollIntervalMs: 5_000,
   };
 }
 
@@ -69,16 +68,5 @@ describe('RiskEngineService', () => {
     });
     expect(assessment.scores.telegram).toBe(0);
     expect(assessment.verdict).toBe(RiskVerdict.FAIL);
-  });
-
-  it('assertApprovedForExecution throws on non-PASS verdict', () => {
-    expect(() =>
-      service.assertApprovedForExecution({
-        verdict: RiskVerdict.REVIEW,
-        scores: { security: 50, social: 50, telegram: 50, aggregate: 50 },
-        simulation: { success: true },
-        evaluatedAt: new Date().toISOString(),
-      }),
-    ).toThrow(ForbiddenRiskException);
   });
 });

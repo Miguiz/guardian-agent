@@ -9,7 +9,6 @@ export interface AppConfiguration {
   /** When true and no API key, use legacy stub calldata (unsafe). */
   uniswapAllowStubFallback: boolean;
   rpcUrlByChainId: Readonly<Record<number, string>>;
-  keeperHubRelayEndpoint: string | undefined;
   /** `from` address passed to viem `eth_call` / `estimateGas` (must be valid 0x + 40 hex). */
   simulationFromAddress: string;
   telegramBotToken: string | undefined;
@@ -62,7 +61,7 @@ export function configuration(): AppConfiguration {
     .filter((s) => s.length > 0);
 
   const telegramPollIntervalMs = parseInt(
-    process.env.TELEGRAM_POLL_INTERVAL_MS ?? '0',
+    process.env.TELEGRAM_POLL_INTERVAL_MS ?? '5000',
     10,
   );
 
@@ -81,14 +80,13 @@ export function configuration(): AppConfiguration {
       (process.env.UNISWAP_ALLOW_STUB_FALLBACK ?? '').toLowerCase(),
     ),
     rpcUrlByChainId,
-    keeperHubRelayEndpoint: process.env.KEEPERHUB_RELAY_ENDPOINT,
     simulationFromAddress:
       process.env.SIMULATION_FROM_ADDRESS ??
       '0x0000000000000000000000000000000000000001',
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
     telegramPollIntervalMs: Number.isFinite(telegramPollIntervalMs)
       ? telegramPollIntervalMs
-      : 0,
+      : 5_000,
     telegramAlertChatIds,
     telegramRiskStaticAddresses,
   };

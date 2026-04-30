@@ -8,7 +8,7 @@ function testConfiguration(): ReturnType<typeof configuration> {
   return {
     ...configuration(),
     telegramBotToken: undefined,
-    telegramPollIntervalMs: 0,
+    telegramPollIntervalMs: 5_000,
   };
 }
 

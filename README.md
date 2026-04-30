@@ -1,6 +1,6 @@
 # Guardian DeFi Agent
 
-Backend NestJS pour un **agent DeFi** orienté hackathon (ex. ETHGlobal Open Agent) : orchestration de swaps, **moteur de risque** multicritère (simulation on-chain, signaux sécurité / social / Telegram), puis relayage optionnel via **KeeperHub**. Aucune transaction n’est relayée sans verdict `PASS` du `RiskEngine`.
+Backend NestJS pour un **agent DeFi** orienté hackathon (ex. ETHGlobal Open Agent) : **moteur de risque** multicritère sur une intention de swap (quote Uniswap, simulation on-chain, signaux sécurité / social / Telegram). **Aucune transaction n’est exécutée ni relayée** par cette API.
 
 ## Stack
 
@@ -41,9 +41,9 @@ npm run start:dev
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | `GET`   | `/health` | Santé du service |
-| `POST`  | `/v1/agent/swap` | Quote Uniswap → évaluation risque → relay KeeperHub si `PASS` |
+| `POST`  | `/v1/agent/swap/risk` | Quote Uniswap → évaluation risque (verdict, scores, simulation) |
 
-Le corps de `/v1/agent/swap` est validé par `class-validator` ; voir les exemples dans Swagger.
+Le corps de `/v1/agent/swap/risk` est validé par `class-validator` ; voir les exemples dans Swagger.
 
 ## Variables d’environnement
 
@@ -60,7 +60,6 @@ Le corps de `/v1/agent/swap` est validé par `class-validator` ; voir les exempl
 | `UNISWAP_API_BASE_URL` | Base URL (défaut `https://trade-api.gateway.uniswap.org`) |
 | `UNISWAP_SWAPPER_ADDRESS` | Wallet `swapper` par défaut si absent du JSON |
 | `UNISWAP_ALLOW_STUB_FALLBACK` | `true` / `1` / `yes` — autorise un stub de quote **non réaliste** sans clé (démo uniquement) |
-| `KEEPERHUB_RELAY_ENDPOINT` | URL `POST` pour relay réel ; absent = hash stub en logs |
 | `TELEGRAM_BOT_TOKEN` | Bot Telegram pour ingérer les `channel_post` |
 | `TELEGRAM_POLL_INTERVAL_MS` | Intervalle de poll `getUpdates` (ms) ; `0` = pas de poll |
 | `TELEGRAM_ALERT_CHAT_IDS` | IDs de canaux autorisés, séparés par des virgules |
@@ -68,10 +67,9 @@ Le corps de `/v1/agent/swap` est validé par `class-validator` ; voir les exempl
 
 ## Architecture (`src/`)
 
-- **`agent`** — Orchestration : quote adapter → `RiskEngine` → `ExecutionHub`  
+- **`agent`** — Quote adapter → `RiskEngine` (réponse JSON d’évaluation uniquement)  
 - **`risk-engine`** — `SimulationService` (viem), evaluateurs (sécurité, social, Telegram), agrégation des scores  
 - **`protocol-adapters`** — Uniswap (`UniswapRoutingService` + registry)  
-- **`execution-hub`** — Garde pré-relay + client KeeperHub  
 - **`config`** / **`common`** — Configuration typée, utilitaires (`viem-chain`, erreurs)
 
 Flux simplifié :
@@ -82,9 +80,6 @@ flowchart LR
   AgentController --> AgentService
   AgentService --> UniswapRouting
   AgentService --> RiskEngine
-  AgentService --> ExecutionHub
-  ExecutionHub --> RiskEngine
-  ExecutionHub --> KeeperHub
 ```
 
 ## Uniswap — erreurs fréquentes
@@ -99,7 +94,7 @@ flowchart LR
 npm test
 ```
 
-Les tests couvrent notamment le refus d’exécution lorsque le risque bloque et les cas de blocklist Telegram statique.
+Les tests couvrent notamment l’évaluation de risque (y compris blocklist Telegram statique) et la sérialisation de la réponse API.
 
 ## Licence
 

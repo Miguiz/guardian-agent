@@ -16,7 +16,7 @@ async function bootstrap(): Promise<void> {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Guardian DeFi Agent')
     .setDescription(
-      'API backend hackathon — orchestration agent, RiskEngine, adapters Uniswap, relay KeeperHub.',
+      'API backend hackathon — évaluation de risque swap (quote Uniswap + RiskEngine), sans exécution de transaction.',
     )
     .setVersion('0.1.0')
     .build();

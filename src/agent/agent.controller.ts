@@ -6,8 +6,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AgentService } from './agent.service';
-import { SwapExecutionResponseDto } from './dto/swap-execution-response.dto';
 import { SwapIntentDto } from './dto/swap-intent.dto';
+import { SwapRiskResponseDto } from './dto/swap-risk-response.dto';
 
 @ApiTags('Guardian DeFi Agent')
 @Controller()
@@ -26,15 +26,15 @@ export class AgentController {
     return { status: 'ok' };
   }
 
-  @Post('v1/agent/swap')
+  @Post('v1/agent/swap/risk')
   @ApiOperation({
-    summary: 'Orchestrer un swap',
+    summary: 'Évaluer le risque d’un swap',
     description:
-      'Quote Uniswap (ou stub) → évaluation RiskEngine → relay KeeperHub uniquement si verdict PASS.',
+      'Quote Uniswap (ou stub) → évaluation RiskEngine (scores, simulation). Aucune transaction n’est exécutée ni relayée.',
   })
   @ApiBody({ type: SwapIntentDto })
-  @ApiOkResponse({ type: SwapExecutionResponseDto })
-  swap(@Body() body: SwapIntentDto): Promise<SwapExecutionResponseDto> {
-    return this.agent.orchestrateSwap(body);
+  @ApiOkResponse({ type: SwapRiskResponseDto })
+  assessSwapRisk(@Body() body: SwapIntentDto): Promise<SwapRiskResponseDto> {
+    return this.agent.assessSwapRisk(body);
   }
 }

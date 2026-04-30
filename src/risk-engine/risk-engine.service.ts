@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ForbiddenRiskException } from '../common/exceptions/forbidden-risk.exception';
 import { SecurityEvaluator } from './evaluators/security.evaluator';
 import { SocialEvaluator } from './evaluators/social.evaluator';
 import { TelegramRiskEvaluator } from './evaluators/telegram-risk.evaluator';
@@ -58,21 +57,5 @@ export class RiskEngineService {
       simulation,
       evaluatedAt: new Date().toISOString(),
     };
-  }
-
-  /**
-   * Enforces Security First: only PASS assessments may proceed to relay.
-   */
-  assertApprovedForExecution(assessment: RiskAssessment): void {
-    if (assessment.verdict !== RiskVerdict.PASS) {
-      throw new ForbiddenRiskException(
-        `RiskEngine blocked execution: verdict=${assessment.verdict}`,
-      );
-    }
-    if (!assessment.simulation.success) {
-      throw new ForbiddenRiskException(
-        'RiskEngine blocked execution: simulation did not succeed',
-      );
-    }
   }
 }
