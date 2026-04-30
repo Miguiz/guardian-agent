@@ -64,6 +64,9 @@ describe('AgentService', () => {
     expect(out.scores.aggregate).toBe(0);
     expect(out.simulation.success).toBe(false);
     expect(out.evaluatedAt).toBeDefined();
+    expect(out.tradeRiskHints.level).toBe('high');
+    expect(out.tradeRiskHints.reasons.length).toBeGreaterThan(0);
+    expect(out.quotePreview).toBeUndefined();
   });
 
   it('returns full risk payload with string gasUsed when verdict is PASS', async () => {
@@ -85,6 +88,14 @@ describe('AgentService', () => {
                 router: '0xE592427A0AEce92De3Edee1F18E0157C05861564',
                 calldata: '0xcafe' as Hex,
                 value: 0n,
+                quotePreview: {
+                  source: 'live' as const,
+                  priceImpactPercent: 0.1,
+                  slippageTolerancePercent: 0.5,
+                  expectedAmountOut: '1000000',
+                  minAmountOut: '995000',
+                  slippageMaxOutputLoss: '5000',
+                },
               }),
             }),
           },
@@ -109,5 +120,8 @@ describe('AgentService', () => {
     expect(out.verdict).toBe(RiskVerdict.PASS);
     expect(out.simulation.gasUsed).toBe('21000');
     expect(out.simulation.logs).toEqual(['ok']);
+    expect(out.quotePreview?.source).toBe('live');
+    expect(out.quotePreview?.slippageMaxOutputLoss).toBe('5000');
+    expect(out.tradeRiskHints.level).toBe('low');
   });
 });

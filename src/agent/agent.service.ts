@@ -3,11 +3,50 @@ import type { ExecutionIntent } from '../risk-engine/types/risk-assessment.types
 import type { RiskAssessment } from '../risk-engine/types/risk-assessment.types';
 import { RiskEngineService } from '../risk-engine/risk-engine.service';
 import { ProtocolAdapterRegistry } from '../protocol-adapters/registry/protocol-adapter.registry';
+import type { SwapQuotePreview } from '../protocol-adapters/interfaces/swap-adapter.interface';
 import type { SwapIntentDto } from './dto/swap-intent.dto';
+import type { QuotePreviewResponseDto } from './dto/swap-risk-response.dto';
 import type { SwapRiskResponseDto } from './dto/swap-risk-response.dto';
 import type { Address } from '../common/types/web3.types';
+import {
+  computeTradeRiskHints,
+  type TradeRiskHints,
+} from './trade-risk-hints';
 
-function toSwapRiskResponse(assessment: RiskAssessment): SwapRiskResponseDto {
+function mapQuotePreview(p: SwapQuotePreview): QuotePreviewResponseDto {
+  return {
+    source: p.source,
+    ...(p.routing !== undefined ? { routing: p.routing } : {}),
+    ...(p.requestId !== undefined ? { requestId: p.requestId } : {}),
+    ...(p.slippageTolerancePercent !== undefined
+      ? { slippageTolerancePercent: p.slippageTolerancePercent }
+      : {}),
+    ...(p.priceImpactPercent !== undefined
+      ? { priceImpactPercent: p.priceImpactPercent }
+      : {}),
+    ...(p.expectedAmountOut !== undefined
+      ? { expectedAmountOut: p.expectedAmountOut }
+      : {}),
+    ...(p.minAmountOut !== undefined ? { minAmountOut: p.minAmountOut } : {}),
+    ...(p.slippageMaxOutputLoss !== undefined
+      ? { slippageMaxOutputLoss: p.slippageMaxOutputLoss }
+      : {}),
+    ...(p.gasUseEstimate !== undefined
+      ? { gasUseEstimate: p.gasUseEstimate }
+      : {}),
+    ...(p.gasFeeUsd !== undefined ? { gasFeeUsd: p.gasFeeUsd } : {}),
+    ...(p.routeSummary !== undefined ? { routeSummary: p.routeSummary } : {}),
+    ...(p.stubWarnings !== undefined
+      ? { stubWarnings: [...p.stubWarnings] }
+      : {}),
+  };
+}
+
+function toSwapRiskResponse(
+  assessment: RiskAssessment,
+  quotePreview: SwapQuotePreview | undefined,
+  tradeRiskHints: TradeRiskHints,
+): SwapRiskResponseDto {
   const gasUsed = assessment.simulation.gasUsed;
   return {
     verdict: assessment.verdict,
@@ -20,6 +59,13 @@ function toSwapRiskResponse(assessment: RiskAssessment): SwapRiskResponseDto {
       ...(assessment.simulation.logs !== undefined
         ? { logs: [...assessment.simulation.logs] }
         : {}),
+    },
+    ...(quotePreview !== undefined
+      ? { quotePreview: mapQuotePreview(quotePreview) }
+      : {}),
+    tradeRiskHints: {
+      level: tradeRiskHints.level,
+      reasons: [...tradeRiskHints.reasons],
     },
     evaluatedAt: assessment.evaluatedAt,
   };
@@ -47,6 +93,7 @@ export class AgentService {
       tokenOut: dto.tokenOut as Address,
       amountIn,
       swapper: dto.swapper as Address | undefined,
+      slippageBps: dto.slippageBps,
     });
 
     const intent: ExecutionIntent = {
@@ -61,9 +108,13 @@ export class AgentService {
     };
 
     const assessment = await this.riskEngine.assess(intent);
-    this.logger.log(
-      `Swap risk assessed: verdict=${assessment.verdict} aggregate=${assessment.scores.aggregate}`,
+    const tradeRiskHints = computeTradeRiskHints(
+      route.quotePreview,
+      assessment,
     );
-    return toSwapRiskResponse(assessment);
+    this.logger.log(
+      `Swap risk assessed: verdict=${assessment.verdict} aggregate=${assessment.scores.aggregate} hints=${tradeRiskHints.level}`,
+    );
+    return toSwapRiskResponse(assessment, route.quotePreview, tradeRiskHints);
   }
 }

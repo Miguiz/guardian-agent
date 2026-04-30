@@ -17,6 +17,10 @@ import type {
   SwapQuoteRequest,
   SwapRouteArtifact,
 } from '../interfaces/swap-adapter.interface';
+import {
+  extractQuotePreviewFromGatewayBody,
+  stubQuotePreview,
+} from './uniswap-quote-preview';
 
 const NATIVE = '0x0000000000000000000000000000000000000000';
 
@@ -225,10 +229,7 @@ export class UniswapRoutingService implements SwapAdapter {
     }
     const swapperNorm = getAddress(swapper);
 
-    const slippageTolerance =
-      request.slippageBps !== undefined
-        ? Math.min(50, Math.max(0.01, request.slippageBps / 100))
-        : 0.5;
+    const slippageTolerance = this.resolveSlippageTolerancePercent(request);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -311,11 +312,23 @@ export class UniswapRoutingService implements SwapAdapter {
       throw new TypeError('swap.swap missing value');
     }
 
+    const quotePreview = extractQuotePreviewFromGatewayBody(
+      quote,
+      slippageTolerance,
+    );
+
     return {
       router: getAddress(to),
       calldata: data as SwapRouteArtifact['calldata'],
       value: BigInt(value),
+      quotePreview,
     };
+  }
+
+  private resolveSlippageTolerancePercent(request: SwapQuoteRequest): number {
+    return request.slippageBps !== undefined
+      ? Math.min(50, Math.max(0.01, request.slippageBps / 100))
+      : 0.5;
   }
 
   private resolveSwapper(request: SwapQuoteRequest): string {
@@ -340,10 +353,12 @@ export class UniswapRoutingService implements SwapAdapter {
     const encodedTail = request.tokenOut.slice(2).padStart(64, '0');
     const calldata =
       `${selector}${encodedTail}` as SwapRouteArtifact['calldata'];
+    const slippageTolerance = this.resolveSlippageTolerancePercent(request);
     return {
       router,
       calldata,
       value: 0n,
+      quotePreview: stubQuotePreview(slippageTolerance),
     };
   }
 }

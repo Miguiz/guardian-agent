@@ -8,6 +8,7 @@ import {
   IsPositive,
   IsString,
   Matches,
+  Max,
   Min,
 } from 'class-validator';
 
@@ -56,4 +57,18 @@ export class SwapIntentDto {
   @IsOptional()
   @IsEthereumAddress()
   swapper?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Tolérance de slippage pour Uniswap : valeur / 100 = pourcentage (ex. 50 → 0,5 %, 300 → 3 %). Max 5000 (50 %).',
+    example: 50,
+    minimum: 1,
+    maximum: 5000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  slippageBps?: number;
 }
